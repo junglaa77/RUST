@@ -6,7 +6,7 @@ import fs from 'fs';
 dotenv.config();
 
 const Rcon = pkg.default ?? pkg;
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 let rconClient;
 
 function logToFile(content) {
@@ -29,7 +29,7 @@ client.once('ready', () => {
     logToFile('✅ 初始化成功');
 
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
-    if (channel) channel.send('🟢 **TakoBot 已上線！** 準備同步聊天 🐙');
+    if (channel) channel.send('🟢 **TakoBot v1.5 上線！** 已啟用聊天同步 🐙');
 
   } catch (error) {
     console.error('❌ RCON 初始化失敗：', error);
@@ -37,6 +37,7 @@ client.once('ready', () => {
   }
 });
 
+// Slash Commands
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -75,6 +76,25 @@ ${result || '[無回應]'}
   }
 });
 
+// Auto chat relay: Discord → RUST
+client.on('messageCreate', async message => {
+  if (message.author.bot) return;
+  if (message.channel.id !== process.env.SYNC_CHANNEL_ID) return;
+  if (!rconClient) return;
+
+  const clean = message.cleanContent.trim();
+  if (!clean) return;
+
+  const text = `[DC] ${message.author.username}：${clean}`;
+  try {
+    const result = await rconClient.execute(`say ${text}`);
+    logToFile(`📤 聊天同步：${text}`);
+  } catch (err) {
+    logToFile(`❌ 聊天同步失敗：${err.message}`);
+  }
+});
+
+// Slash Command Registration
 const commands = [
   new SlashCommandBuilder()
     .setName('say')
