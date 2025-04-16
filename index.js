@@ -46,7 +46,7 @@ client.once('ready', () => {
     console.log('✅ RCON 已初始化');
     logToFile('✅ 初始化成功');
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
-    if (channel) channel.send('🟢 **TakoBot v1.8 上線！** 加入登出通知 + 活動提示 🧠');
+    if (channel) channel.send('🟢');
     startRustLogWatcher();
   } catch (error) {
     console.error('❌ RCON 初始化失敗：', error);
