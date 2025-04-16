@@ -46,7 +46,7 @@ client.once('ready', () => {
     console.log('✅ RCON 已初始化');
     logToFile('✅ 初始化成功');
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
-    if (channel) channel.send('🟢 **TakoBot v1.7 上線！** 已啟用雙向聊天同步 🧠');
+    if (channel) channel.send('🟢 **TakoBot v1.8 上線！** 加入登出通知 + 活動提示 🧠');
     startRustLogWatcher();
   } catch (error) {
     console.error('❌ RCON 初始化失敗：', error);
@@ -119,31 +119,39 @@ client.on('messageCreate', async message => {
   }
 });
 
-// RUST ➜ Discord (via log polling)
+// RUST ➜ Discord 活動通知
 function startRustLogWatcher() {
   const logFilePath = './rustlog.txt';
   if (!fs.existsSync(logFilePath)) {
-    fs.writeFileSync(logFilePath, ''); // create if not exist
+    fs.writeFileSync(logFilePath, '');
   }
 
   let lastSize = 0;
   setInterval(() => {
     fs.stat(logFilePath, (err, stats) => {
       if (err || stats.size <= lastSize) return;
-      const stream = fs.createReadStream(logFilePath, {
-        start: lastSize,
-        end: stats.size
-      });
+      const stream = fs.createReadStream(logFilePath, { start: lastSize, end: stats.size });
       const rl = readline.createInterface({ input: stream });
+
       rl.on('line', line => {
-        if (line.includes(':')) {
-          const channel = client.channels.cache.get(process.env.SYNC_CHANNEL_ID);
-          if (channel) channel.send(`🎮 ${line}`);
+        const channel = client.channels.cache.get(process.env.SYNC_CHANNEL_ID);
+        if (!channel) return;
+
+        if (line.includes('joined')) {
+          channel.send(`🟢 玩家加入：${line}`);
+        } else if (line.includes('disconnected')) {
+          channel.send(`🔴 玩家離開：${line}`);
+        } else if (line.includes('killed')) {
+          channel.send(`💀 擊殺事件：${line}`);
+        } else if (line.includes('loot') || line.includes('found') || line.includes('pickup')) {
+          channel.send(`🎁 拾取紀錄：${line}`);
+        } else if (line.includes(':')) {
+          channel.send(`🎮 ${line}`);
         }
       });
       lastSize = stats.size;
     });
-  }, 3000); // poll every 3 sec
+  }, 3000);
 }
 
 const commands = [
