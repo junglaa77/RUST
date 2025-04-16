@@ -9,7 +9,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 let rconClient;
 
-client.once('ready', async () => {
+client.once('ready', () => {
   console.log(`🤖 機器人已登入：${client.user.tag}`);
 
   try {
@@ -20,8 +20,8 @@ client.once('ready', async () => {
       timeout: 5000,
     });
 
-    await rconClient.connect();
-    console.log('✅ RCON 連線成功');
+    rconClient.connect(); // ✅ 修正：同步 connect 呼叫
+    console.log('✅ RCON 嘗試連線中...');
 
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
     if (channel) channel.send('🟢 **TakoBot 已上線！** 準備同步聊天 🐙');
