@@ -20,14 +20,13 @@ client.once('ready', () => {
       timeout: 5000,
     });
 
-    rconClient.connect(); // ✅ 修正：同步 connect 呼叫
-    console.log('✅ RCON 嘗試連線中...');
+    console.log('✅ RCON 已初始化');
 
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
     if (channel) channel.send('🟢 **TakoBot 已上線！** 準備同步聊天 🐙');
 
   } catch (error) {
-    console.error('❌ RCON 連線失敗：', error);
+    console.error('❌ RCON 初始化失敗：', error);
   }
 });
 
