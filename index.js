@@ -3,6 +3,8 @@ import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'di
 import dotenv from 'dotenv';
 import pkg from 'rcon-srcds';
 import fs from 'fs';
+import readline from 'readline';
+import { createReadStream } from 'fs';
 dotenv.config();
 
 const Rcon = pkg.default ?? pkg;
@@ -44,7 +46,8 @@ client.once('ready', () => {
     console.log('✅ RCON 已初始化');
     logToFile('✅ 初始化成功');
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
-    if (channel) channel.send('🟢 **TakoBot v1.6 上線！** 雙向同步 + 玩家查詢 🐙');
+    if (channel) channel.send('🟢 **TakoBot v1.7 上線！** 已啟用雙向聊天同步 🧠');
+    startRustLogWatcher();
   } catch (error) {
     console.error('❌ RCON 初始化失敗：', error);
     logToFile(`❌ 初始化錯誤：${error.message}`);
@@ -100,7 +103,7 @@ ${result || '無資料'}
   }
 });
 
-// Message sync
+// Discord ➜ RUST
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   if (message.channel.id !== process.env.SYNC_CHANNEL_ID) return;
@@ -116,20 +119,39 @@ client.on('messageCreate', async message => {
   }
 });
 
+// RUST ➜ Discord (via log polling)
+function startRustLogWatcher() {
+  const logFilePath = './rustlog.txt';
+  if (!fs.existsSync(logFilePath)) {
+    fs.writeFileSync(logFilePath, ''); // create if not exist
+  }
+
+  let lastSize = 0;
+  setInterval(() => {
+    fs.stat(logFilePath, (err, stats) => {
+      if (err || stats.size <= lastSize) return;
+      const stream = fs.createReadStream(logFilePath, {
+        start: lastSize,
+        end: stats.size
+      });
+      const rl = readline.createInterface({ input: stream });
+      rl.on('line', line => {
+        if (line.includes(':')) {
+          const channel = client.channels.cache.get(process.env.SYNC_CHANNEL_ID);
+          if (channel) channel.send(`🎮 ${line}`);
+        }
+      });
+      lastSize = stats.size;
+    });
+  }, 3000); // poll every 3 sec
+}
+
 const commands = [
-  new SlashCommandBuilder()
-    .setName('say')
-    .setDescription('傳送訊息到 Rust 伺服器')
+  new SlashCommandBuilder().setName('say').setDescription('傳送訊息到 Rust 伺服器')
     .addStringOption(opt => opt.setName('message').setDescription('要說的話').setRequired(true)),
-  new SlashCommandBuilder()
-    .setName('rconcheck')
-    .setDescription('檢查 RCON 是否連線成功'),
-  new SlashCommandBuilder()
-    .setName('players')
-    .setDescription('顯示目前在線玩家列表'),
-  new SlashCommandBuilder()
-    .setName('uptime')
-    .setDescription('顯示伺服器開機運行時間'),
+  new SlashCommandBuilder().setName('rconcheck').setDescription('檢查 RCON 是否連線成功'),
+  new SlashCommandBuilder().setName('players').setDescription('顯示目前在線玩家列表'),
+  new SlashCommandBuilder().setName('uptime').setDescription('顯示伺服器開機運行時間'),
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
