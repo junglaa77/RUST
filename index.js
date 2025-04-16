@@ -1,9 +1,10 @@
 
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import dotenv from 'dotenv';
-import rcon from 'rcon-srcds';
+import pkg from 'rcon-srcds';
 dotenv.config();
 
+const Rcon = pkg.default ?? pkg;
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 let rconClient;
@@ -12,7 +13,7 @@ client.once('ready', async () => {
   console.log(`🤖 機器人已登入：${client.user.tag}`);
 
   try {
-    rconClient = rcon({
+    rconClient = new Rcon({
       host: process.env.RCON_HOST,
       port: Number(process.env.RCON_PORT),
       password: process.env.RCON_PASSWORD,
