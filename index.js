@@ -36,10 +36,19 @@ client.on('interactionCreate', async interaction => {
   if (interaction.commandName === 'say') {
     const message = interaction.options.getString('message');
     try {
-      await rconClient.execute(`say ${message}`);
-      await interaction.reply(`📣 已傳送至 RUST：${message}`);
+      const result = await rconClient.execute(`say ${message}`);
+      await interaction.reply({
+        content: `📣 已嘗試傳送至 RUST：
+\`\`\`
+${result || '[無回應]'}
+\`\`\``,
+        ephemeral: true
+      });
     } catch (e) {
-      await interaction.reply('❌ 傳送失敗，RCON 尚未連線');
+      await interaction.reply({
+        content: `❌ 傳送失敗，錯誤：\`${e.message}\``,
+        ephemeral: true
+      });
     }
   }
 
