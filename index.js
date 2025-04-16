@@ -1,6 +1,8 @@
 
 import { Client, GatewayIntentBits } from 'discord.js';
-import { Rcon } from 'rcon-srcds';
+import pkg from 'rcon-srcds';
+const Rcon = pkg;
+
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -18,9 +20,9 @@ client.once('ready', async () => {
   try {
     await rcon.connect();
     console.log('✅ RCON 連線成功');
-    // 啟動後持續 ping log
+    // 假設支援 log 指令，請依實際調整
     setInterval(async () => {
-      const log = await rcon.execute('server.log'); // 假設支援 log 指令，視實際可用指令調整
+      const log = await rcon.execute('server.log');
       if (log) {
         const lines = log.split('\n');
         lines.forEach(line => {
