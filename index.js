@@ -1,26 +1,25 @@
 
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import dotenv from 'dotenv';
-import pkg from 'rcon-srcds';
+import rcon from 'rcon-srcds';
 dotenv.config();
 
-const Rcon = pkg;
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-let rcon;
+let rconClient;
 
 client.once('ready', async () => {
   console.log(`🤖 機器人已登入：${client.user.tag}`);
 
   try {
-    rcon = new Rcon({
+    rconClient = rcon({
       host: process.env.RCON_HOST,
       port: Number(process.env.RCON_PORT),
       password: process.env.RCON_PASSWORD,
       timeout: 5000,
     });
 
-    await rcon.connect();
+    await rconClient.connect();
     console.log('✅ RCON 連線成功');
 
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
@@ -37,7 +36,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.commandName === 'say') {
     const message = interaction.options.getString('message');
     try {
-      await rcon.execute(`say ${message}`);
+      await rconClient.execute(`say ${message}`);
       await interaction.reply(`📣 已傳送至 RUST：${message}`);
     } catch (e) {
       await interaction.reply('❌ 傳送失敗，RCON 尚未連線');
@@ -46,7 +45,7 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.commandName === 'rconcheck') {
     try {
-      await rcon.execute('status');
+      await rconClient.execute('status');
       await interaction.reply('✅ RCON 連線正常');
     } catch (e) {
       await interaction.reply('❌ RCON 無法連線，請檢查主機設定');
