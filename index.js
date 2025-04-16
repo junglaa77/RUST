@@ -1,65 +1,67 @@
 
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
-import pkg from 'rcon-srcds';
 import dotenv from 'dotenv';
+import pkg from 'rcon-srcds';
 dotenv.config();
 
 const Rcon = pkg;
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-const rcon = new Rcon({
-  host: process.env.RCON_HOST,
-  port: Number(process.env.RCON_PORT),
-  password: process.env.RCON_PASSWORD,
-  timeout: 5000,
-});
+let rcon;
 
 client.once('ready', async () => {
   console.log(`🤖 機器人已登入：${client.user.tag}`);
+
   try {
+    rcon = new Rcon({
+      host: process.env.RCON_HOST,
+      port: Number(process.env.RCON_PORT),
+      password: process.env.RCON_PASSWORD,
+      timeout: 5000,
+    });
+
     await rcon.connect();
-    console.log('✅ RCON 已連線');
+    console.log('✅ RCON 連線成功');
 
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
     if (channel) channel.send('🟢 **TakoBot 已上線！** 準備同步聊天 🐙');
 
-    setInterval(async () => {
-      const log = await rcon.execute('server.log');
-      if (log) {
-        const lines = log.split('\n');
-        lines.forEach(line => {
-          const match = line.match(/\d{2}:\d{2}:\d{2} \| (#[A-Z]+) +\| ([^:]+) ?: (.+)/);
-          if (match) {
-            const [, scope, player, message] = match;
-            const scopeText = scope === "#TEAM" ? "👥 Team" : "🌐 Global";
-            const formatted = `**${scopeText}** | 🧑‍🚀 \`${player.trim()}\`：${message.trim()}`;
-            if (channel) channel.send(formatted);
-          }
-        });
-      }
-    }, 8000);
-
-  } catch (err) {
-    console.error('❌ RCON 連線失敗：', err);
+  } catch (error) {
+    console.error('❌ RCON 連線失敗：', error);
   }
 });
 
-// Slash Command: /say
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
+
   if (interaction.commandName === 'say') {
     const message = interaction.options.getString('message');
-    await rcon.execute(`say ${message}`);
-    await interaction.reply(`🗣️ 已傳送至 RUST：${message}`);
+    try {
+      await rcon.execute(`say ${message}`);
+      await interaction.reply(`📣 已傳送至 RUST：${message}`);
+    } catch (e) {
+      await interaction.reply('❌ 傳送失敗，RCON 尚未連線');
+    }
+  }
+
+  if (interaction.commandName === 'rconcheck') {
+    try {
+      await rcon.execute('status');
+      await interaction.reply('✅ RCON 連線正常');
+    } catch (e) {
+      await interaction.reply('❌ RCON 無法連線，請檢查主機設定');
+    }
   }
 });
 
-// Register slash command
 const commands = [
   new SlashCommandBuilder()
     .setName('say')
     .setDescription('傳送訊息到 Rust 伺服器')
-    .addStringOption(opt => opt.setName('message').setDescription('要傳送的訊息').setRequired(true))
+    .addStringOption(opt => opt.setName('message').setDescription('要說的話').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('rconcheck')
+    .setDescription('檢查 RCON 是否連線成功')
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -69,9 +71,9 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
       Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commands }
     );
-    console.log('✅ Slash 指令已註冊');
+    console.log('✅ Slash 指令已成功註冊');
   } catch (error) {
-    console.error('❌ 指令註冊錯誤：', error);
+    console.error('❌ Slash 註冊錯誤：', error);
   }
 })();
 
