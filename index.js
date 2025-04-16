@@ -14,9 +14,26 @@ function logToFile(content) {
   fs.appendFileSync('rcon-debug.log', `[${timestamp}] ${content}\n`);
 }
 
+async function ensureRconReady() {
+  if (!rconClient) {
+    try {
+      rconClient = new Rcon({
+        host: process.env.RCON_HOST,
+        port: Number(process.env.RCON_PORT),
+        password: process.env.RCON_PASSWORD,
+        timeout: 5000,
+      });
+      logToFile('✅ RCON 重連成功');
+    } catch (e) {
+      logToFile(`❌ RCON 重連失敗：${e.message}`);
+      throw e;
+    }
+  }
+  return rconClient;
+}
+
 client.once('ready', () => {
   console.log(`🤖 機器人已登入：${client.user.tag}`);
-
   try {
     rconClient = new Rcon({
       host: process.env.RCON_HOST,
@@ -24,66 +41,71 @@ client.once('ready', () => {
       password: process.env.RCON_PASSWORD,
       timeout: 5000,
     });
-
     console.log('✅ RCON 已初始化');
     logToFile('✅ 初始化成功');
-
     const channel = client.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
-    if (channel) channel.send('🟢 **TakoBot v1.5 上線！** 已啟用聊天同步 🐙');
-
+    if (channel) channel.send('🟢 **TakoBot v1.6 上線！** 雙向同步 + 玩家查詢 🐙');
   } catch (error) {
     console.error('❌ RCON 初始化失敗：', error);
     logToFile(`❌ 初始化錯誤：${error.message}`);
   }
 });
 
-// Slash Commands
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === 'say') {
-    const message = interaction.options.getString('message');
-    try {
-      logToFile(`➡️ 執行 RCON 指令：say ${message}`);
-      const result = await rconClient.execute(`say ${message}`);
-      logToFile(`⬅️ 回傳：${result}`);
-      await interaction.reply({
-        content: `📣 指令已送出：
+  const command = interaction.commandName;
+  let replyText = '';
+  try {
+    const rcon = await ensureRconReady();
+
+    if (command === 'say') {
+      const msg = interaction.options.getString('message');
+      const result = await rcon.execute(`say ${msg}`);
+      replyText = `📣 指令已送出：
 \`\`\`
 ${result || '[無回應]'}
-\`\`\``,
-        ephemeral: true
-      });
-    } catch (e) {
-      logToFile(`❌ 指令失敗：${e.message}`);
-      await interaction.reply({
-        content: `❌ 傳送失敗，錯誤：\`${e.message}\``,
-        ephemeral: true
-      });
+\`\`\``;
+      logToFile(`➡️ say ${msg} ⬅️ ${result}`);
     }
-  }
 
-  if (interaction.commandName === 'rconcheck') {
-    try {
-      logToFile('➡️ 執行 RCON 指令：status');
-      const result = await rconClient.execute('status');
-      logToFile(`⬅️ 回傳：${result}`);
-      await interaction.reply('✅ RCON 連線正常');
-    } catch (e) {
-      logToFile(`❌ status 失敗：${e.message}`);
-      await interaction.reply('❌ RCON 無法連線，請檢查主機設定');
+    if (command === 'rconcheck') {
+      const result = await rcon.execute('status');
+      replyText = '✅ RCON 連線正常';
+      logToFile(`✅ status 回應：${result}`);
     }
+
+    if (command === 'players') {
+      const result = await rcon.execute('players');
+      replyText = `👥 線上玩家列表：
+\`\`\`
+${result || '無資料'}
+\`\`\``;
+      logToFile(`👥 players 查詢結果：${result}`);
+    }
+
+    if (command === 'uptime') {
+      const result = await rcon.execute('uptime');
+      replyText = `⏱️ 伺服器運作時間：
+\`\`\`
+${result || '無資料'}
+\`\`\``;
+      logToFile(`⏱️ uptime 結果：${result}`);
+    }
+
+    await interaction.reply({ content: replyText, ephemeral: true });
+  } catch (e) {
+    logToFile(`❌ Slash 執行失敗：${e.message}`);
+    await interaction.reply({ content: `❌ 執行失敗：\`${e.message}\``, ephemeral: true });
   }
 });
 
-// Auto chat relay: Discord → RUST
+// Message sync
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   if (message.channel.id !== process.env.SYNC_CHANNEL_ID) return;
-  if (!rconClient) return;
-
   const clean = message.cleanContent.trim();
-  if (!clean) return;
+  if (!clean || !rconClient) return;
 
   const text = `[DC] ${message.author.username}：${clean}`;
   try {
@@ -94,7 +116,6 @@ client.on('messageCreate', async message => {
   }
 });
 
-// Slash Command Registration
 const commands = [
   new SlashCommandBuilder()
     .setName('say')
@@ -102,16 +123,19 @@ const commands = [
     .addStringOption(opt => opt.setName('message').setDescription('要說的話').setRequired(true)),
   new SlashCommandBuilder()
     .setName('rconcheck')
-    .setDescription('檢查 RCON 是否連線成功')
+    .setDescription('檢查 RCON 是否連線成功'),
+  new SlashCommandBuilder()
+    .setName('players')
+    .setDescription('顯示目前在線玩家列表'),
+  new SlashCommandBuilder()
+    .setName('uptime')
+    .setDescription('顯示伺服器開機運行時間'),
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 (async () => {
   try {
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
     console.log('✅ Slash 指令已成功註冊');
   } catch (error) {
     console.error('❌ Slash 註冊錯誤：', error);
